@@ -1,0 +1,1081 @@
+REPORT zpm_rss_conffon.
+
+INCLUDE zpm_rss_conffon_t01.
+INCLUDE zpm_rss_conffon_c01.
+INCLUDE zpm_rss_conffon_c02.
+INCLUDE zpm_rss_conffon_c03.
+INCLUDE zpm_rss_conffon_c04.
+INCLUDE zpm_rss_conffon_o01.
+INCLUDE zpm_rss_conffon_i01.
+INCLUDE zpm_rss_conffon_s01.
+INCLUDE zpm_rss_conffon_e01.
+
+========================================
+ZPM_RSS_CONFFON_C01
+========================================
+CLASS lcx_exception DEFINITION
+    INHERITING FROM cx_static_check.
+
+  PUBLIC SECTION.
+    INTERFACES if_t100_dyn_msg.
+    INTERFACES if_t100_message.
+
+    METHODS constructor
+      IMPORTING
+        it_return TYPE bapirettab OPTIONAL.
+
+    DATA mt_return TYPE bapirettab READ-ONLY.
+ENDCLASS.
+
+CLASS lcl_model DEFINITION.
+  PUBLIC SECTION.
+    "TODO параметры СЭ
+    TYPES:
+      BEGIN OF ts_params,
+        werks   TYPE werks_d,
+        r_sdate TYPE RANGE OF zepp_start_date,
+      END OF ts_params.
+
+    "TODO сделать тип для таблицы модели
+    TYPES tt_rep TYPE STANDARD TABLE OF ztpp_ex_mes WITH EMPTY KEY.
+
+    CLASS-METHODS class_constructor.
+
+    METHODS constructor
+      IMPORTING
+        io_owner TYPE REF TO lcl_appl.
+
+    "! Выбрать данные для обработки
+    METHODS select_data
+      IMPORTING
+        is_params TYPE ts_params
+      EXPORTING
+        et_rep    TYPE tt_rep.
+
+    CLASS-DATA:
+      "TODO ZSSP
+      BEGIN OF mcs_zssp_pp054_export,
+        intgr_sys_id TYPE zspp054export_zssp-intgr_sys_id,
+      END OF mcs_zssp_pp054_export .
+
+  PRIVATE SECTION.
+    DATA mo_owner TYPE REF TO lcl_appl.
+ENDCLASS.
+
+CLASS lcl_view DEFINITION.
+  PUBLIC SECTION.
+    INTERFACES if_alv_rm_grid_friend. " Для вызова защищённых методов CL_GUI_ALV_GRID
+
+    TYPES:
+      BEGIN OF ENUM tv_event_type STRUCTURE c_s_event_type,
+        grid_double_click,
+        grid_user_command,
+        hotspot_click,
+        button_click,
+        screen_ucomm,
+        grid_delayed_callback,
+      END OF ENUM tv_event_type STRUCTURE c_s_event_type,
+      BEGIN OF ts_event_params,
+        s_column TYPE lvc_s_col,
+        s_row_no TYPE lvc_s_roid,
+        ucomm    TYPE sy-ucomm,
+      END OF ts_event_params.
+
+    METHODS constructor
+      IMPORTING
+        io_owner     TYPE REF TO lcl_appl
+        iv_structure TYPE dd02l-tabname
+        iv_title     TYPE csequence OPTIONAL.
+
+    "! Вывод на экран
+    METHODS show.
+
+    "! Инициализация alv грида
+    METHODS init_grid.
+
+    "! Освобождение ресурсов, очистка
+    METHODS free.
+
+    "! Обновление содержимого alv грида
+    METHODS refresh
+      IMPORTING
+        iv_stable TYPE abap_bool DEFAULT abap_false.
+
+    "! Получить список выбранных строк alv грида
+    METHODS get_selected_rows
+      IMPORTING
+        iv_del_agg TYPE abap_bool DEFAULT abap_true
+      EXPORTING
+        et_rows    TYPE lvc_t_roid
+      RAISING
+        lcx_exception.
+
+    "! Установить текущую ячейку
+    METHODS set_current_cell
+      IMPORTING
+        iv_row    TYPE i
+        iv_column TYPE lvc_fname OPTIONAL.
+
+    "! Получить текст заголовка
+    METHODS get_title
+      RETURNING
+        VALUE(rv_title) TYPE string.
+
+    "! Проверка ввода в alv
+    METHODS check_changed_data
+      RETURNING
+        VALUE(rv_valid) TYPE abap_bool.
+
+    "! PAI
+    METHODS pbo.
+
+    "! PAI
+    METHODS pai.
+
+    "! Событие VIEW, см. тип TV_EVENT_TYPE
+    EVENTS view_event
+      EXPORTING
+        VALUE(iv_type)   TYPE tv_event_type
+        VALUE(is_params) TYPE ts_event_params.
+
+    "! Получить экземплял VIEW по номеру экрана
+    CLASS-METHODS get_view
+      IMPORTING
+        iv_dynnr       TYPE sy-dynnr
+      RETURNING
+        VALUE(ro_view) TYPE REF TO lcl_view.
+
+    "! Обновить все экраны
+    CLASS-METHODS refresh_views.
+
+    "! Управление видимостью
+    METHODS set_visible
+      IMPORTING
+        iv_visible TYPE abap_bool.
+
+    "! Получить текущую ячейку
+    METHODS get_current_cell
+      EXPORTING
+        es_col_id TYPE lvc_s_col
+        es_row_no TYPE lvc_s_roid.
+
+    METHODS set_ucomm_excl
+      IMPORTING
+        it_ucomm_excl TYPE ucomm_it.
+
+    DATA mref_table TYPE REF TO data READ-ONLY.
+
+  PROTECTED SECTION.
+    METHODS get_container
+      RETURNING
+        VALUE(ro_container) TYPE REF TO cl_gui_container.
+
+    "! Формирование списка полей отчёта
+    METHODS get_fcat
+      IMPORTING
+        iv_structure TYPE dd02l-tabname
+      EXPORTING
+        et_fcat      TYPE lvc_t_fcat.
+
+    METHODS change_grid_params
+      CHANGING
+        cs_layout  TYPE lvc_s_layo
+        cs_variant TYPE disvariant
+        ct_fcat    TYPE lvc_t_fcat
+        ct_excl    TYPE ui_functions.
+
+    METHODS on_toolbar FOR EVENT toolbar OF cl_gui_alv_grid
+      IMPORTING
+        e_object.
+
+    "! Обработка событий alv грида (преобразование в событие VIEW_EVENT)
+    METHODS on_double_click FOR EVENT double_click OF cl_gui_alv_grid
+      IMPORTING
+        e_column
+        es_row_no.
+    METHODS on_user_command FOR EVENT user_command OF cl_gui_alv_grid
+      IMPORTING
+        e_ucomm.
+    METHODS on_hotspot_click FOR EVENT hotspot_click OF cl_gui_alv_grid
+      IMPORTING
+        e_column_id
+        es_row_no.
+    METHODS on_button_click FOR EVENT button_click OF cl_gui_alv_grid
+      IMPORTING
+        es_col_id
+        es_row_no.
+    METHODS on_delayed_callback FOR EVENT delayed_callback OF cl_gui_alv_grid
+      IMPORTING
+        sender.
+
+    DATA mo_owner TYPE REF TO lcl_appl.
+    DATA mv_structure TYPE dd02l-tabname.
+    DATA mo_grid TYPE REF TO cl_gui_alv_grid.
+    DATA mo_container TYPE REF TO cl_gui_container.
+    DATA mv_dynnr TYPE sy-dynnr.
+    DATA mt_ucomm_excl TYPE ucomm_it.
+
+  PRIVATE SECTION.
+    CONSTANTS:
+      BEGIN OF c_s_view_fields,
+        t_style TYPE fieldname VALUE 'T_STYLE',
+      END OF c_s_view_fields.
+
+    TYPES:
+      BEGIN OF ts_view_stack,
+        dynnr TYPE sy-dynnr,
+        view  TYPE REF TO lcl_view,
+      END OF ts_view_stack,
+      tt_view_stack TYPE SORTED TABLE OF ts_view_stack WITH UNIQUE KEY dynnr.
+
+    DATA mv_initialized TYPE abap_bool.
+    DATA mv_title TYPE string.
+    DATA mv_status_key TYPE sy-pfkey.
+
+    CLASS-DATA mct_view_stack TYPE tt_view_stack.
+ENDCLASS.
+
+CLASS lcl_view_alv DEFINITION
+    INHERITING FROM lcl_view.
+  PUBLIC SECTION.
+
+    METHODS constructor
+      IMPORTING
+        io_owner TYPE REF TO lcl_appl.
+ENDCLASS.
+
+CLASS lcl_appl DEFINITION.
+  PUBLIC SECTION.
+    TYPES:
+      BEGIN OF ts_params.
+        INCLUDE TYPE lcl_model=>ts_params AS s_params.
+    TYPES:
+      END OF ts_params.
+
+    TYPES tt_rep TYPE lcl_model=>tt_rep.
+
+    CONSTANTS:
+      BEGIN OF c_s_variant_handle,
+        main TYPE disvariant-handle VALUE 'MAIN',
+      END OF c_s_variant_handle.
+
+    CONSTANTS:
+      "TODO сделать кнопки
+      BEGIN OF c_s_ucomm,
+        back        TYPE sy-ucomm VALUE 'BACK',
+        exit        TYPE sy-ucomm VALUE 'EXIT',
+        cancel      TYPE sy-ucomm VALUE 'CANCEL',
+        zz_recreate TYPE ui_func VALUE 'ZZ_RECREATE' ##NO_TEXT,
+        zz_refresh  TYPE ui_func VALUE 'ZZ_REFRESH' ##NO_TEXT,
+      END OF c_s_ucomm.
+
+    CONSTANTS:
+      "TODO Сделать структуру ALV
+      BEGIN OF c_s_rep_structure,
+        main TYPE dd02l-tabname VALUE 'ZSPP_MES_REPORT_MKAL_ALV',
+      END OF c_s_rep_structure.
+
+    METHODS constructor.
+
+    "! Запуск отчёта
+    METHODS run
+      IMPORTING
+        is_params TYPE ts_params
+      RAISING
+        lcx_exception.
+
+    "! Загрузка варианта пользователя
+    METHODS load_sscr_variant
+      IMPORTING
+        iv_id             TYPE csequence
+      RETURNING
+        VALUE(rv_success) TYPE abap_bool.
+
+    "! Вызов средства поиска варианта
+    METHODS f4_variant
+      CHANGING
+        cv_variant TYPE disvariant-variant.
+
+    "! Обработчик события VIEW_EVENT объекта LCL_VIEW
+    METHODS on_view_event FOR EVENT view_event OF lcl_view
+      IMPORTING
+        sender
+        iv_type
+        is_params.
+
+    DATA mt_rep TYPE tt_rep.
+    DATA ms_params TYPE ts_params READ-ONLY.
+
+  PRIVATE SECTION.
+    "! Чтение настроек ZSSP
+    METHODS read_zssp.
+
+    "! Обработка проваливаний в поля
+    METHODS process_drill_down
+      IMPORTING
+        is_params TYPE lcl_view=>ts_event_params
+        io_view   TYPE REF TO lcl_view
+      RAISING
+        lcx_exception.
+
+    "! Обработка комманд пользователя
+    METHODS process_ucomm
+      IMPORTING
+        io_view  TYPE REF TO lcl_view
+        iv_ucomm TYPE sy-ucomm
+      RAISING
+        RESUMABLE(lcx_exception).
+
+    "! Обработка комманд пользователя
+    METHODS process_screen_ucomm
+      IMPORTING
+        io_view  TYPE REF TO lcl_view
+        iv_ucomm TYPE sy-ucomm
+      RAISING
+        RESUMABLE(lcx_exception).
+
+    "! Вызов транзакции с провоекой полномочий
+    METHODS call_transaction
+      IMPORTING
+        iv_tcode  TYPE sy-tcode
+        iv_tcode2 TYPE sy-tcode OPTIONAL
+        iv_par1   TYPE memoryid
+        iv_value1 TYPE any
+        iv_par2   TYPE memoryid OPTIONAL
+        iv_value2 TYPE any OPTIONAL
+        iv_par3   TYPE memoryid OPTIONAL
+        iv_value3 TYPE any OPTIONAL
+        iv_par4   TYPE memoryid OPTIONAL
+        iv_value4 TYPE any OPTIONAL
+      RAISING
+        lcx_exception.
+
+    "! Проверка полномочий на запуск транзакции
+    METHODS auth_check_s_tcode
+      IMPORTING
+        iv_tcode        TYPE sy-tcode
+      RETURNING
+        VALUE(rv_valid) TYPE abap_bool.
+
+    "! Проверка полномочий на запуск транзакции из списка
+    METHODS check_tcode
+      IMPORTING
+        iv_tcode        TYPE sy-tcode
+        iv_tcode2       TYPE sy-tcode OPTIONAL
+      RETURNING
+        VALUE(rv_tcode) TYPE sy-tcode.
+
+    "! Заполнение лога из данных исключения
+    METHODS process_exception
+      IMPORTING
+        ix_exc    TYPE REF TO lcx_exception
+      CHANGING
+        ct_return TYPE bapirettab.
+
+    "! Вывод лога
+    METHODS display_log
+      IMPORTING
+        it_return TYPE bapirettab.
+
+    "! Принудительное обновление отчёта
+    METHODS force_refresh.
+
+    "! Получить значение поля в отёте
+    METHODS get_value
+      IMPORTING
+        it_table        TYPE INDEX TABLE
+        iv_row          TYPE i
+        iv_field        TYPE fieldname
+      RETURNING
+        VALUE(rv_value) TYPE char100.
+
+    "! Обновить данные отчёта
+    METHODS refresh_rep.
+
+    "! Проверка полномочий на отчёт
+    METHODS check_authority
+      RETURNING VALUE(rv_is_grant_del_all) TYPE abap_bool
+      RAISING   lcx_exception.
+
+    DATA mo_model TYPE REF TO lcl_model.
+    DATA mv_refresh TYPE abap_bool.
+    DATA mo_view_alv TYPE REF TO lcl_view.
+ENDCLASS.
+
+==================================
+ZPM_RSS_CONFFON_C02
+==================================
+CLASS lcl_view IMPLEMENTATION.
+  METHOD constructor.
+    super->constructor( ).
+
+    mo_owner      = io_owner.
+    mv_title      = iv_title.
+    mv_structure  = iv_structure.
+    mv_status_key = 'MAIN'.
+    mv_dynnr      = '2000'.
+
+    INSERT VALUE #( dynnr = mv_dynnr
+                    view  = me      ) INTO TABLE mct_view_stack.
+  ENDMETHOD.
+
+  METHOD show.
+    CALL SCREEN mv_dynnr.
+  ENDMETHOD.
+
+  METHOD change_grid_params.
+  ENDMETHOD.
+
+  METHOD init_grid.
+    IF mv_initialized = abap_true.
+      RETURN.
+    ENDIF.
+
+    mv_initialized = abap_true.
+
+    DATA(lo_container) = get_container( ).
+
+    mo_grid = NEW #( i_parent = lo_container ).
+
+    DATA(ls_layout) = VALUE lvc_s_layo(
+                          zebra      = abap_true
+                          cwidth_opt = abap_true
+                          sel_mode   = 'A'
+                          stylefname = c_s_view_fields-t_style ).
+
+    DATA(ls_variant) = VALUE disvariant(
+                           report  = sy-repid ).
+
+    DATA(lt_excl) = VALUE ui_functions(
+                        ( cl_gui_alv_grid=>mc_fc_info ) ).
+
+    get_fcat(
+      EXPORTING
+        iv_structure = mv_structure
+      IMPORTING
+        et_fcat      = DATA(lt_fcat) ).
+
+    change_grid_params(
+      CHANGING
+        cs_layout  = ls_layout
+        cs_variant = ls_variant
+        ct_fcat    = lt_fcat
+        ct_excl    = lt_excl ).
+
+    SET HANDLER on_double_click FOR mo_grid.
+    SET HANDLER on_toolbar FOR mo_grid.
+    SET HANDLER on_user_command FOR mo_grid.
+    SET HANDLER on_hotspot_click FOR mo_grid.
+    SET HANDLER on_button_click FOR mo_grid.
+
+    mo_grid->set_table_for_first_display(
+      EXPORTING
+        i_save               = COND #( WHEN ls_variant IS NOT INITIAL THEN 'A' )
+        is_layout            = ls_layout
+        is_variant           = ls_variant
+        it_toolbar_excluding = lt_excl
+      CHANGING
+        it_outtab            = mref_table->*
+        it_fieldcatalog      = lt_fcat ).
+  ENDMETHOD.
+
+  METHOD free.
+    IF mo_grid IS BOUND.
+      mo_grid->free( ).
+      FREE mo_grid.
+    ENDIF.
+
+    IF mo_container IS BOUND.
+      mo_container->free( ).
+      FREE mo_container.
+    ENDIF.
+
+    DELETE mct_view_stack WHERE dynnr = mv_dynnr.
+
+    mv_initialized = abap_false.
+  ENDMETHOD.
+
+  METHOD refresh.
+    IF iv_stable = abap_true.
+      mo_grid->refresh_table_display(
+          is_stable = VALUE #( col = abap_true row = abap_true ) ).
+    ELSE.
+      mo_grid->refresh_table_display( ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD get_fcat.
+    CALL FUNCTION 'LVC_FIELDCATALOG_MERGE'
+      EXPORTING
+        i_structure_name = iv_structure
+      CHANGING
+        ct_fieldcat      = et_fcat
+      EXCEPTIONS
+        OTHERS           = 0.
+
+*    LOOP AT et_fcat REFERENCE INTO DATA(lref_fcat).
+*      CASE lref_fcat->fieldname.
+*        WHEN lcl_appl=>c_s_rep_fields-error_indicator.
+**          lref_fcat->icon = abap_true.
+*          lref_fcat->outputlen = 4.
+*
+*        WHEN lcl_appl=>c_s_rep_fields-doknr.
+*          lref_fcat->hotspot = abap_true.
+*
+*        WHEN OTHERS.
+*      ENDCASE.
+*    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD on_double_click.
+    RAISE EVENT view_event
+      EXPORTING
+        iv_type   = c_s_event_type-grid_double_click
+        is_params = VALUE #(
+                        s_column = e_column
+                        s_row_no = es_row_no ).
+  ENDMETHOD.
+
+  METHOD on_hotspot_click.
+    RAISE EVENT view_event
+      EXPORTING
+        iv_type   = c_s_event_type-hotspot_click
+        is_params = VALUE #(
+                        s_column = e_column_id
+                        s_row_no = es_row_no ).
+  ENDMETHOD.
+
+  METHOD on_button_click.
+    RAISE EVENT view_event
+      EXPORTING
+        iv_type   = c_s_event_type-button_click
+        is_params = VALUE #(
+                        s_column = es_col_id
+                        s_row_no = es_row_no ).
+  ENDMETHOD.
+
+  METHOD on_user_command.
+    RAISE EVENT view_event
+      EXPORTING
+        iv_type   = c_s_event_type-grid_user_command
+        is_params = VALUE #(
+                        ucomm = e_ucomm ).
+  ENDMETHOD.
+
+  METHOD on_delayed_callback.
+    RAISE EVENT view_event
+      EXPORTING
+        iv_type   = c_s_event_type-grid_delayed_callback
+        is_params = VALUE #( ).
+  ENDMETHOD.
+
+  METHOD set_visible.
+    IF mo_grid IS BOUND.
+      mo_grid->set_visible( iv_visible ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD get_current_cell.
+    mo_grid->get_current_cell(
+      IMPORTING
+        es_col_id = es_col_id
+        es_row_no = es_row_no ).
+  ENDMETHOD.
+
+  METHOD on_toolbar.
+  ENDMETHOD.
+
+  METHOD get_selected_rows.
+    mo_grid->get_selected_rows(
+      IMPORTING
+        et_row_no = et_rows ).
+    IF iv_del_agg = abap_true.
+      DELETE et_rows WHERE row_id <= 0.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD set_current_cell.
+    IF iv_column IS SUPPLIED.
+      mo_grid->set_current_cell_via_id(
+         EXPORTING
+           is_column_id = VALUE #( fieldname = iv_column )
+           is_row_no    = VALUE #( row_id    = iv_row ) ).
+    ELSE.
+      mo_grid->set_selected_rows(
+         EXPORTING
+           it_row_no = VALUE #( ( row_id = iv_row ) ) ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD get_view.
+    ro_view = VALUE #( mct_view_stack[ KEY primary_key dynnr = iv_dynnr ]-view OPTIONAL ).
+  ENDMETHOD.
+
+  METHOD get_title.
+    rv_title = mv_title.
+  ENDMETHOD.
+
+  METHOD refresh_views.
+    LOOP AT mct_view_stack REFERENCE INTO DATA(lref_view).
+      lref_view->view->refresh( ).
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD check_changed_data.
+    mo_grid->check_changed_data(
+      IMPORTING
+        e_valid   = rv_valid ).
+  ENDMETHOD.
+
+  METHOD pbo.
+    DATA(lv_title) = get_title( ).
+
+    SET PF-STATUS mv_status_key EXCLUDING mt_ucomm_excl.
+    SET TITLEBAR 'MAIN' WITH lv_title.
+  ENDMETHOD.
+
+  METHOD pai.
+    DATA(lv_ucomm) = gv_ucomm.
+    CLEAR gv_ucomm.
+
+    RAISE EVENT view_event
+      EXPORTING
+        iv_type   = c_s_event_type-screen_ucomm
+        is_params = VALUE #( ucomm = lv_ucomm ).
+  ENDMETHOD.
+
+  METHOD get_container.
+    ro_container = mo_container.
+  ENDMETHOD.
+
+  METHOD set_ucomm_excl.
+    mt_ucomm_excl = it_ucomm_excl.
+  ENDMETHOD.
+ENDCLASS.
+
+CLASS lcl_view_alv IMPLEMENTATION.
+  METHOD constructor.
+    super->constructor(
+      EXPORTING
+        io_owner     = io_owner
+        iv_structure = lcl_appl=>c_s_rep_structure-main ).
+
+    mref_table = REF #( io_owner->mt_rep ).
+  ENDMETHOD.
+ENDCLASS.
+
+========================================
+ZPM_RSS_CONFFON_C03
+========================================
+CLASS lcl_appl IMPLEMENTATION.
+  METHOD constructor.
+    super->constructor( ).
+
+    read_zssp( ).
+
+    mo_model = NEW #( me ).
+  ENDMETHOD.
+
+  METHOD read_zssp.
+
+  ENDMETHOD.
+
+  METHOD run.
+    ms_params = is_params.
+
+*    mo_rep->select_data(
+*      EXPORTING
+*        is_params = CORRESPONDING #( ms_params )
+*      IMPORTING
+*        et_mkal = mt_rep_mkal
+*        et_stko = mt_rep_stko
+*        et_stat = mt_rep_stat ).
+
+    mo_view_alv = NEW lcl_view_alv( me ).
+    mo_view_alv->init_grid( ).
+    SET HANDLER on_view_event FOR mo_view_alv.
+  ENDMETHOD.
+
+  METHOD on_view_event.
+    DATA lt_ret TYPE bapirettab.
+
+    mv_refresh = abap_false.
+
+    TRY.
+        CASE iv_type.
+          WHEN lcl_view=>c_s_event_type-grid_double_click.
+            process_drill_down(
+                is_params = is_params
+                io_view   = sender ).
+
+          WHEN lcl_view=>c_s_event_type-grid_user_command.
+            process_ucomm(
+                io_view  = sender
+                iv_ucomm = is_params-ucomm ).
+
+          WHEN lcl_view=>c_s_event_type-screen_ucomm.
+            process_screen_ucomm(
+                io_view  = sender
+                iv_ucomm = is_params-ucomm ).
+
+          WHEN lcl_view=>c_s_event_type-hotspot_click.
+            process_drill_down(
+                is_params = is_params
+                io_view   = sender ).
+        ENDCASE.
+
+      CATCH BEFORE UNWIND lcx_exception INTO DATA(lx_exc).
+        " Единая точка входа для обработки исключений
+        " Исключения передаются через RAISE EXCEPTION TYPE lcx_exception MESSAGE
+        " Предупреждения и информиционные сообщения передавать с помощью RAISE RESUMABLE EXCEPTION (выполнится возврат в точку выполнения)
+        process_exception(
+          EXPORTING
+            ix_exc    = lx_exc
+          CHANGING
+            ct_return = lt_ret ).
+
+        IF lx_exc->is_resumable = abap_true.
+          RESUME.
+        ENDIF.
+    ENDTRY.
+
+    display_log( lt_ret ).
+
+    IF mv_refresh = abap_true.
+      refresh_rep( ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD process_drill_down.
+*    CASE is_params-s_column.
+*      WHEN c_s_rep_fields-equnr OR
+*           c_s_rep_fields-eqktx.
+*
+*        DATA(lv_value) = get_value(
+*                             it_table = io_view->mref_table->*
+*                             iv_row   = is_params-s_row_no-row_id
+*                             iv_field = c_s_rep_fields-equnr ).
+*
+*        IF lv_value IS NOT INITIAL.
+*          call_transaction(
+*              iv_tcode  = 'IE03'
+*              iv_par1   = 'EQN'
+*              iv_value1 = lv_value ).
+*        ENDIF.
+*
+*      WHEN OTHERS.
+*    ENDCASE.
+  ENDMETHOD.
+
+  METHOD process_ucomm.
+    DATA(lv_refresh) = abap_false.
+
+    CASE iv_ucomm.
+      WHEN c_s_ucomm-zz_refresh.
+        refresh_rep( ).
+
+      WHEN OTHERS.
+    ENDCASE.
+
+    IF lv_refresh = abap_true.
+      force_refresh( ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD process_screen_ucomm.
+    DATA(lv_leave_screen) = abap_false.
+
+    CASE iv_ucomm.
+      WHEN c_s_ucomm-back OR
+           c_s_ucomm-exit OR
+           c_s_ucomm-cancel.
+
+        lv_leave_screen = abap_true.
+    ENDCASE.
+
+    IF lv_leave_screen = abap_true.
+      IF io_view IS BOUND.
+        io_view->free( ).
+      ENDIF.
+
+      LEAVE TO SCREEN 0.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD auth_check_s_tcode.
+    IF iv_tcode IS INITIAL.
+      RETURN.
+    ENDIF.
+    AUTHORITY-CHECK OBJECT 'S_TCODE'
+        ID 'TCD' FIELD iv_tcode.
+    rv_valid = xsdbool( sy-subrc = 0 ).
+  ENDMETHOD.
+
+  METHOD check_tcode.
+    IF auth_check_s_tcode( iv_tcode ).
+      rv_tcode = iv_tcode.
+    ELSEIF auth_check_s_tcode( iv_tcode2 ).
+      rv_tcode = iv_tcode2.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD call_transaction.
+    IF iv_value1 IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    DATA(lv_tcode) = check_tcode(
+                         iv_tcode  = iv_tcode
+                         iv_tcode2 = iv_tcode2 ).
+
+    IF lv_tcode IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    SET PARAMETER ID iv_par1 FIELD iv_value1.
+    IF iv_par2 IS SUPPLIED.
+      SET PARAMETER ID iv_par2 FIELD iv_value2.
+    ENDIF.
+    IF iv_par3 IS SUPPLIED.
+      SET PARAMETER ID iv_par3 FIELD iv_value3.
+    ENDIF.
+    IF iv_par4 IS SUPPLIED.
+      SET PARAMETER ID iv_par4 FIELD iv_value4.
+    ENDIF.
+    TRY.
+        CALL TRANSACTION lv_tcode WITH AUTHORITY-CHECK AND SKIP FIRST SCREEN.
+      CATCH cx_sy_authorization_error.
+        RAISE EXCEPTION TYPE lcx_exception
+          MESSAGE e134(w#) WITH iv_tcode.
+    ENDTRY.
+    SET PARAMETER ID iv_par1 FIELD space.
+    IF iv_par2 IS SUPPLIED.
+      SET PARAMETER ID iv_par2 FIELD space.
+    ENDIF.
+    IF iv_par3 IS SUPPLIED.
+      SET PARAMETER ID iv_par3 FIELD space.
+    ENDIF.
+    IF iv_par4 IS SUPPLIED.
+      SET PARAMETER ID iv_par4 FIELD space.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD f4_variant.
+    DATA(ls_variant) = VALUE disvariant(
+        report = sy-repid
+        handle = c_s_variant_handle-main ).
+    DATA(lv_exit) = abap_false.
+
+    CALL FUNCTION 'LVC_VARIANT_F4'
+      EXPORTING
+        is_variant = ls_variant
+        i_save     = 'A'
+      IMPORTING
+        e_exit     = lv_exit
+        es_variant = ls_variant
+      EXCEPTIONS
+        OTHERS     = 1.
+
+    IF sy-subrc = 0 AND
+       lv_exit = abap_false.
+
+      cv_variant = ls_variant-variant.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD force_refresh.
+    mv_refresh = abap_true.
+  ENDMETHOD.
+
+  METHOD process_exception.
+    IF ix_exc->if_t100_message~t100key-msgid IS NOT INITIAL.
+      APPEND VALUE #(
+          type        = ix_exc->if_t100_dyn_msg~msgty
+          id         = ix_exc->if_t100_message~t100key-msgid
+          number     = ix_exc->if_t100_message~t100key-msgno
+          message_v1 = ix_exc->if_t100_dyn_msg~msgv1
+          message_v2 = ix_exc->if_t100_dyn_msg~msgv2
+          message_v3 = ix_exc->if_t100_dyn_msg~msgv3
+          message_v4 = ix_exc->if_t100_dyn_msg~msgv4 ) TO ct_return.
+    ENDIF.
+
+    IF ix_exc->mt_return IS NOT INITIAL.
+      APPEND LINES OF ix_exc->mt_return TO ct_return.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD display_log.
+    DATA ls_profile TYPE bal_s_prof.
+
+    IF it_return IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    IF it_return IS NOT INITIAL.
+      IF lines( it_return ) = 1.
+        DATA(lref_ret) = REF #( it_return[ 1 ] ).
+        MESSAGE ID lref_ret->id TYPE 'S' NUMBER lref_ret->number DISPLAY LIKE lref_ret->type
+            WITH lref_ret->message_v1 lref_ret->message_v2 lref_ret->message_v3 lref_ret->message_v4.
+      ELSE.
+        DATA(lo_log) = NEW zcldev_log( ).
+        lo_log->msgtab_add( it_msg_bapiret2 = it_return ).
+
+        CALL FUNCTION 'BAL_DSP_PROFILE_POPUP_GET'
+          EXPORTING
+            end_col             = 127
+          IMPORTING
+            e_s_display_profile = ls_profile.
+
+        ls_profile-use_grid   = abap_true.
+        ls_profile-cwidth_opt = abap_true.
+
+        lo_log->profile_set( is_profile = ls_profile ).
+        lo_log->msg_show( ).
+
+        FREE lo_log.
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD load_sscr_variant.
+    DATA lv_rc TYPE sy-subrc.
+
+    rv_success = abap_false.
+
+    DATA(lv_variant) = CONV rsvar-variant( iv_id ).
+
+    CALL FUNCTION 'RS_VARIANT_EXISTS'
+      EXPORTING
+        report  = sy-repid
+        variant = lv_variant
+      IMPORTING
+        r_c     = lv_rc
+      EXCEPTIONS
+        OTHERS  = 1.
+
+    IF sy-subrc = 0 AND
+       lv_rc = 0.
+
+      CALL FUNCTION 'RS_SUPPORT_SELECTIONS'
+        EXPORTING
+          report  = sy-repid
+          variant = lv_variant
+        EXCEPTIONS
+          OTHERS  = 1.
+
+      rv_success = xsdbool( sy-subrc = 0 ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD get_value.
+    DATA(lref_row) = REF #( it_table[ iv_row ] OPTIONAL ).
+    IF lref_row IS NOT BOUND.
+      RETURN.
+    ENDIF.
+
+    ASSIGN COMPONENT iv_field OF STRUCTURE lref_row->* TO FIELD-SYMBOL(<lv_value>).
+    IF sy-subrc = 0.
+      rv_value = <lv_value>.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD refresh_rep.
+*    mo_rep->select_data(
+*      EXPORTING
+*        is_params = CORRESPONDING #( ms_params )
+*      IMPORTING
+*        et_mkal = mt_rep_mkal
+*        et_stko = mt_rep_stko
+*        et_stat = mt_rep_stat ).
+
+    mo_view_alv->refresh( ).
+  ENDMETHOD.
+
+  METHOD check_authority.
+    "// TODO
+*    AUTHORITY-CHECK OBJECT 'ZPP_MESEXP'
+*      ID 'WERKS' FIELD ms_params-werks
+*      ID 'ACTVT'  FIELD '03'.
+    DATA(lv_is_grant_read) = xsdbool( sy-subrc = 0 ).
+*
+*    AUTHORITY-CHECK OBJECT 'ZPP_MESEXP'
+*      ID 'WERKS' FIELD ms_params-werks
+*      ID 'ACTVT'  FIELD '06'.
+*    rv_is_grant_del_all = xsdbool( sy-subrc = 0 ).
+    rv_is_grant_del_all = abap_true.
+
+    IF rv_is_grant_del_all = abap_false AND
+       lv_is_grant_read    = abap_false.
+
+      RAISE EXCEPTION TYPE lcx_exception
+        MESSAGE e013(zpp_mes_ziiot_exp) WITH ms_params-werks.
+    ENDIF.
+  ENDMETHOD.
+ENDCLASS.
+
+CLASS lcx_exception IMPLEMENTATION.
+  METHOD constructor.
+    super->constructor( ).
+
+    mt_return = it_return.
+  ENDMETHOD.
+ENDCLASS.
+
+========================================
+ZPM_RSS_CONFFON_C04
+========================================
+CLASS lcl_model IMPLEMENTATION.
+  METHOD constructor.
+    mo_owner = io_owner.
+  ENDMETHOD.
+
+  METHOD select_data.
+    "TODO Выборка данных
+
+  ENDMETHOD.
+
+   METHOD class_constructor.
+    "TODO загрузка ZSSP
+    zcl_params=>move_to_structure( EXPORTING iv_prgid = 'PM484'
+                                             iv_varid = 'VAR1'
+                                   CHANGING cs_zssp = mcs_zssp_pp054_export ).
+  ENDMETHOD.
+ENDCLASS.
+
+========================================
+ZPM_RSS_CONFFON_O01
+========================================
+MODULE pbo_base OUTPUT.
+  lcl_view=>get_view( sy-dynnr )->pbo( ).
+ENDMODULE.
+
+========================================
+ZPM_RSS_CONFFON_I01
+========================================
+MODULE pai_base INPUT.
+  lcl_view=>get_view( sy-dynnr )->pai( ).
+ENDMODULE.
+
+========================================
+ZPM_RSS_CONFFON_S01
+========================================
+SELECTION-SCREEN BEGIN OF BLOCK bl_sel WITH FRAME TITLE TEXT-s01.
+  PARAMETERS p_werks LIKE gs_scr-werks OBLIGATORY.
+  SELECT-OPTIONS s_sdate FOR gs_scr-sdate OBLIGATORY NO-EXTENSION DEFAULT sy-datum TO sy-datum.
+SELECTION-SCREEN END OF BLOCK bl_sel.
+
+========================================
+ZPM_RSS_CONFFON_E01
+========================================
+INITIALIZATION.
+  go_appl = NEW lcl_appl( ).
+
+
+START-OF-SELECTION.
+  TRY.
+      go_appl->run( VALUE #( werks   = p_werks
+                             r_sdate = s_sdate[] ) ).
+
+    CATCH lcx_exception INTO DATA(go_exc).
+      MESSAGE go_exc TYPE 'S' DISPLAY LIKE 'E'.
+  ENDTRY.
