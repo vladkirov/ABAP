@@ -11,6 +11,15 @@ INCLUDE zpm_rss_conffon_s01.
 INCLUDE zpm_rss_conffon_e01.
 
 ========================================
+ZPM_RSS_CONFFON_T01
+========================================
+CLASS lcl_appl DEFINITION DEFERRED.
+
+DATA go_appl TYPE REF TO lcl_appl.
+DATA gs_scr TYPE zspm_rss_conffon_scr.
+DATA gv_ucomm TYPE sy-ucomm.
+
+========================================
 ZPM_RSS_CONFFON_C01
 ========================================
 CLASS lcx_exception DEFINITION
